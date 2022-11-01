@@ -1,0 +1,110 @@
+Notes on Buster image (27)
+
+Flash ROCK 4SE Buster image - kernel 5.10.131 / Python 3.7.3
+
+https://github.com/radxa/debos-radxa/releases/download/20220804-0257/rockpi-4b-debian-buster-xfce4-arm64-20220804-0519-gpt.img.xz
+
+sudo apt update && sudo apt upgrade
+
+sudo apt install apt-utils git
+sudo apt install xfce4-power-manager
+
+
+sudo usermod -aG plugdev $USER
+
+Reboot
+
+*****************************************
+Coral test - https://coral.ai/docs/accelerator/get-started/
+Requirements
+A computer with one of the following operating systems:
+Linux Debian 10, or a derivative thereof (such as Ubuntu 18.04), and a system architecture of either x86-64, Armv7 (32-bit), or Armv8 (64-bit) (includes support for Raspberry Pi 3 Model B+, Raspberry Pi 4, and Raspberry Pi Zero 2)
+One available USB port (for the best performance, use a USB 3.0 port)
+Python 3.6 - 3.9?? (errors in 3.9)
+
+Install TPU Runtime
+echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | sudo tee /etc/apt/sources.list.d/coral-edgetpu.list
+
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+
+sudo apt-get update
+
+sudo apt-get install libedgetpu1-std
+
+Plug in Coral (after udev update)
+
+Install Pycoral
+sudo apt-get install python3-pycoral
+
+Run example to test
+mkdir coral && cd coral
+
+git clone https://github.com/google-coral/pycoral.git
+
+cd pycoral
+
+bash examples/install_requirements.sh classify_image.py
+
+python3 examples/classify_image.py \
+--model test_data/mobilenet_v2_1.0_224_inat_bird_quant_edgetpu.tflite \
+--labels test_data/inat_bird_labels.txt \
+--input test_data/parrot.jpg
+
+
+***************************************
+Blacklist video drivers
+
+rock@rock-4se:~$ cat /etc/modprobe.d/video.conf 
+blacklist rockchip-rga
+blacklist rockchip-vdec
+blacklist hantro-vpu
+
+reboot
+
+****************************
+Birdcam
+
+git clone https://github.com/milnepe/rock-coral-ai-birdcam
+
+cd pi-coral-ai-birdcam
+
+bash birdcam/install_requirements.sh
+
+bash birdcam.sh
+
+*********************************************
+
+TESTS
+
+*********************************************
+List attached camera devices
+
+rock@rock-4se:~$ cat camera-devs.sh 
+#!/bin/bash
+
+for device in /sys/class/video4linux/*
+do
+	declare devpath="/dev/$(basename $device)"
+	read name < $device/name
+	echo "$devpath => $name"
+done
+
+rock@rock-4se:~$ ./camera-devs.sh 
+/dev/video0 => HP 320 FHD Webcam: HP 320 FHD W
+/dev/video1 => HP 320 FHD Webcam: HP 320 FHD W
+
+
+Test GStreamer pipeline
+
+rock@rock-4se:~$ cat video-test.sh 
+#!/bin/bash
+
+#export DISPLAY=:0.0
+#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/aarch64-linux-gnu/gstreamer-1.0
+#echo $LD_LIBRARY_PATH
+
+#gst-launch-1.0 videotestsrc ! videoconvert ! autovideosink
+
+#gst-launch-1.0 filesrc location="/home/pi/Videos/test.mp4" ! decodebin ! videoconvert ! xvimagesink
+
+gst-launch-1.0 v4l2src device=/dev/video0 ! video/x-raw,width=640,height=480 ! videoconvert ! ximagesink
